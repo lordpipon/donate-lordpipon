@@ -34,6 +34,7 @@ const STORAGE_KEY = "lp_donations_v1";
 export default function DonatePage() {
   const [donors, setDonors] = useState<Donor[]>(SEED_DONORS);
   const [copied, setCopied] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
 
   useEffect(() => {
     try {
@@ -63,6 +64,23 @@ export default function DonatePage() {
       setTimeout(() => setCopied(false), 2000);
     } catch {
       // ignore
+    }
+  };
+
+  const startStripeCheckout = async () => {
+    setCheckoutLoading(true);
+    try {
+      const res = await fetch("/api/create-checkout-session", {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (data?.url) {
+        window.location.href = data.url;
+      } else {
+        setCheckoutLoading(false);
+      }
+    } catch {
+      setCheckoutLoading(false);
     }
   };
 
@@ -130,14 +148,12 @@ export default function DonatePage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button asChild className="w-full">
-                  <a
-                    href={PAYMENT_METHODS.stripe.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Donate with Card
-                  </a>
+                <Button
+                  className="w-full"
+                  onClick={startStripeCheckout}
+                  disabled={checkoutLoading}
+                >
+                  {checkoutLoading ? "Redirecting…" : "Donate with Card"}
                 </Button>
               </CardContent>
             </Card>

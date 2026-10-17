@@ -10,17 +10,17 @@ export const SITE_CONFIG = {
 export const PAYMENT_METHODS = {
   stripe: {
     enabled: true,
-    url: "https://donate.stripe.com/your-link-here", // Replace with your Stripe payment link
+    // Checkout is created server-side at /api/create-checkout-session
   },
   kofi: {
     enabled: true,
-    url: "https://ko-fi.com/lordpipon", // Replace with your Ko-fi username
+    url: "https://ko-fi.com/piponidlo",
   },
   crypto: {
     enabled: true,
-    label: "Proton Wallet",
-    address: "proton_address_here", // Replace with your Proton wallet address
-    network: "Proton (XPR)",
+    label: "Bitcoin",
+    address: "bc1q8u83tpwkhedlf8xqkccd5yvnyruqahegqv5xdw",
+    network: "Bitcoin (BTC)",
   },
 } as const;
 
