@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Heart,
   Target,
-  Users,
   CreditCard,
   Coffee,
   Wallet,
   Copy,
   Check,
+  HandCoins,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
@@ -22,40 +23,27 @@ import {
 import { Progress } from "@/components/ui/progress";
 import {
   SITE_CONFIG,
+  DONATION_AMOUNTS,
   PAYMENT_METHODS,
-  SEED_DONORS,
-  maskName,
-  getTotalRaised,
-  type Donor,
 } from "@/lib/donations";
 
-const STORAGE_KEY = "lp_donations_v1";
-
 export default function DonatePage() {
-  const [donors, setDonors] = useState<Donor[]>(SEED_DONORS);
   const [copied, setCopied] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [amount, setAmount] = useState<number>(DONATION_AMOUNTS.default);
+  const [customAmount, setCustomAmount] = useState("");
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const saved: Donor[] = JSON.parse(raw);
-        if (Array.isArray(saved) && saved.length > 0) {
-          setDonors(saved);
-        }
-      }
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  const totalRaised = getTotalRaised(donors);
-  const progressPercent = Math.min(
-    (totalRaised / SITE_CONFIG.goal) * 100,
-    100
-  );
+  const totalRaised = SITE_CONFIG.raised;
+  const progressPercent = Math.min((totalRaised / SITE_CONFIG.goal) * 100, 100);
   const goalReached = totalRaised >= SITE_CONFIG.goal;
+  const remaining = Math.max(SITE_CONFIG.goal - totalRaised, 0);
+
+  const effectiveAmount =
+    customAmount !== "" ? Number(customAmount) : amount;
+  const amountValid =
+    Number.isFinite(effectiveAmount) &&
+    effectiveAmount >= DONATION_AMOUNTS.min &&
+    effectiveAmount <= DONATION_AMOUNTS.max;
 
   const copyAddress = async () => {
     try {
@@ -68,10 +56,13 @@ export default function DonatePage() {
   };
 
   const startStripeCheckout = async () => {
+    if (!amountValid) return;
     setCheckoutLoading(true);
     try {
       const res = await fetch("/api/create-checkout-session", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: effectiveAmount }),
       });
       const data = await res.json();
       if (data?.url) {
@@ -83,13 +74,6 @@ export default function DonatePage() {
       setCheckoutLoading(false);
     }
   };
-
-  const recentDonors = [...donors]
-    .sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    )
-    .slice(0, 8);
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-background to-secondary/40">
@@ -114,8 +98,8 @@ export default function DonatePage() {
             </CardTitle>
             <CardDescription>
               {goalReached
-                ? "Goal reached — thank you all!"
-                : `$${SITE_CONFIG.goal - totalRaised > 0 ? (SITE_CONFIG.goal - totalRaised).toFixed(0) : 0} left to reach the goal`}
+                ? "Goal reached — thank you!"
+                : `$${remaining.toFixed(0)} left to reach the goal`}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -128,9 +112,52 @@ export default function DonatePage() {
                 of ${SITE_CONFIG.goal} goal
               </span>
             </div>
-            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-              <Users className="h-4 w-4" />
-              {donors.length} {donors.length === 1 ? "donor" : "donors"} so far
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <HandCoins className="h-5 w-5 text-primary" />
+              Choose an amount
+            </CardTitle>
+            <CardDescription>
+              Pick a preset or enter a custom amount
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-4 gap-2">
+              {DONATION_AMOUNTS.presets.map((preset) => (
+                <Button
+                  key={preset}
+                  variant={
+                    customAmount === "" && amount === preset
+                      ? "default"
+                      : "outline"
+                  }
+                  onClick={() => {
+                    setAmount(preset);
+                    setCustomAmount("");
+                  }}
+                >
+                  ${preset}
+                </Button>
+              ))}
+            </div>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                $
+              </span>
+              <Input
+                type="number"
+                inputMode="decimal"
+                min={DONATION_AMOUNTS.min}
+                max={DONATION_AMOUNTS.max}
+                placeholder="Custom amount"
+                value={customAmount}
+                onChange={(e) => setCustomAmount(e.target.value)}
+                className="pl-7"
+              />
             </div>
           </CardContent>
         </Card>
@@ -151,9 +178,13 @@ export default function DonatePage() {
                 <Button
                   className="w-full"
                   onClick={startStripeCheckout}
-                  disabled={checkoutLoading}
+                  disabled={checkoutLoading || !amountValid}
                 >
-                  {checkoutLoading ? "Redirecting…" : "Donate with Card"}
+                  {checkoutLoading
+                    ? "Redirecting…"
+                    : amountValid
+                      ? `Donate $${effectiveAmount}`
+                      : "Enter an amount"}
                 </Button>
               </CardContent>
             </Card>
@@ -166,9 +197,7 @@ export default function DonatePage() {
                   <Coffee className="h-5 w-5 text-primary" />
                   Ko-fi
                 </CardTitle>
-                <CardDescription>
-                  Support quickly via Ko-fi
-                </CardDescription>
+                <CardDescription>Support quickly via Ko-fi</CardDescription>
               </CardHeader>
               <CardContent>
                 <Button asChild variant="secondary" className="w-full">
@@ -193,7 +222,8 @@ export default function DonatePage() {
                 Crypto — {PAYMENT_METHODS.crypto.label}
               </CardTitle>
               <CardDescription>
-                Send crypto directly to the wallet below ({PAYMENT_METHODS.crypto.network})
+                Send crypto directly to the wallet below (
+                {PAYMENT_METHODS.crypto.network})
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -217,48 +247,6 @@ export default function DonatePage() {
             </CardContent>
           </Card>
         )}
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-primary" />
-              Latest Donors
-            </CardTitle>
-            <CardDescription>
-              Thank you to everyone who has contributed
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {recentDonors.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No donations yet. Be the first!
-              </p>
-            ) : (
-              <ul className="divide-y">
-                {recentDonors.map((donor) => (
-                  <li
-                    key={donor.id}
-                    className="flex items-center justify-between gap-3 py-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">
-                        {maskName(donor.name)}
-                      </p>
-                      {donor.message && (
-                        <p className="truncate text-xs text-muted-foreground">
-                          &ldquo;{donor.message}&rdquo;
-                        </p>
-                      )}
-                    </div>
-                    <span className="shrink-0 text-sm font-semibold text-primary">
-                      ${donor.amount.toFixed(2)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
 
         <footer className="text-center text-xs text-muted-foreground">
           Made with ❤️ by {SITE_CONFIG.name}

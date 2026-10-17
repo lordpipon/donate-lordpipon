@@ -17,13 +17,13 @@ The following values are placeholders and must be updated before going live.
 | Field | Current Value | What to Set |
 |-------|--------------|-------------|
 | `mode` | `payment` | Set to `"payment"` for one-time charges or `"subscription"` for recurring billing. |
-| `success_url` | `${process.env.DOMAIN}/success?session_id={CHECKOUT_SESSION_ID}` | Your actual post-payment success page URL. Keep the `{CHECKOUT_SESSION_ID}` template. A `/success` page does not exist yet — create one or point this at an existing page. |
+| `success_url` | `${process.env.DOMAIN}/success?session_id={CHECKOUT_SESSION_ID}` | Points at the `/success` page (already created). Keep the `{CHECKOUT_SESSION_ID}` template. |
 | `cancel_url` | `${process.env.DOMAIN}` | Your actual cancel/return page URL. |
-| `line_items[].price` | `price_...` | Your actual Stripe Price ID from the [Dashboard](https://dashboard.stripe.com/prices) or API. |
 
-> Tip: for a donation site you can either use a fixed Price ID, or switch to dynamic pricing with
-> `line_items: [{ price_data: { currency: "usd", product_data: { name: "Donation" }, unit_amount: <cents> }, quantity: 1 }]`
-> if you want the donor to choose the amount.
+> Amounts are **dynamic**: the donor picks a preset or enters a custom amount on the homepage,
+> and the server builds `line_items[].price_data` (USD, validated to $1–$1000). No fixed Price ID is
+> required. To use fixed prices instead, replace `line_items` with `[{ price: "price_...", quantity: 1 }]`
+> using a real Price ID from the [Dashboard](https://dashboard.stripe.com/prices).
 
 **Environment variables** (see [.env.example](.env.example)) — replace with your real values:
 
@@ -94,18 +94,21 @@ npm install
 
 ```
 src/app/api/create-checkout-session/route.ts   # POST endpoint that creates the Checkout Session
-.env.example                                    # template for required env vars
+src/app/success/page.tsx                         # post-payment thank-you page (success_url)
+src/app/page.tsx                                 # amount picker + "Donate with Card" button
+src/components/theme-toggle.tsx                  # light/dark/device switcher
+.env.example                                     # template for required env vars
 STRIPE_INTEGRATION_TODO.md                       # this file
 ```
 
 ### 4. How the integration works
 
-1. The donor clicks **“Donate with Card”** on the homepage (`src/app/page.tsx`).
-2. The client POSTs to `/api/create-checkout-session`.
-3. The server creates a hosted Checkout Session via `stripe.checkout.sessions.create(...)` and returns
-   `session.url`.
+1. The donor picks a preset or custom amount and clicks **“Donate $X”** on the homepage (`src/app/page.tsx`).
+2. The client POSTs `{ amount }` to `/api/create-checkout-session`.
+3. The server validates the amount, creates a hosted Checkout Session via
+   `stripe.checkout.sessions.create(...)`, and returns `session.url`.
 4. The browser is redirected to the Stripe-hosted payment page.
-5. On success/cancel, Stripe redirects back to `success_url` / `cancel_url`.
+5. On success/cancel, Stripe redirects back to `success_url` (`/success`) / `cancel_url` (`/`).
 6. (Optional) A webhook confirms `checkout.session.completed` to fulfil the donation.
 
 ### 5. Testing
@@ -122,11 +125,11 @@ Use any future expiry date, any 3-digit CVC, and any postal code.
 
 ### 6. Next steps
 
-- Replace the `price_...` placeholder with a real Price ID (or switch to dynamic `price_data`).
-- Create a `/success` page for the `success_url`.
-- Add a webhook handler to record completed donations and update the goal/donor list globally
-  (currently the donor list persists only per-browser via `localStorage`).
-- Switch `mode` to `subscription` if you want recurring donations.
+- (Optional) Use fixed Price IDs instead of the dynamic amount — see the note in "Values to Replace".
+- Add a webhook handler to record completed donations and update the goal total globally
+  (the goal currently reads from `SITE_CONFIG.raised` in `src/lib/donations.ts`).
+- Switch `mode` to `subscription` if you want recurring donations, and re-add
+  `payment_method_collection: "always"`.
 
 ### Resources
 
